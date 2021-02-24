@@ -1,7 +1,14 @@
 package Debugger;
 
+import Emulator.ComputerFiles.Register;
+
 public interface BasicComputerListener {
 
-    abstract void onMemoryChange(int add, int value);
+    boolean onMemoryChange(int address, short value);
 
+    boolean onRegisterChange(Register register, short value);
+
+    boolean onFlagChange();
+
+    boolean onEveryThingChanging();
 }
