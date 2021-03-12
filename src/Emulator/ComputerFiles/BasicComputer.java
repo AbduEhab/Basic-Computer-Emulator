@@ -69,7 +69,7 @@ public class BasicComputer {
 
         // Set AR with IR(0-11), Set I accordingly, extract oppcode at T2
         SC = 0x01;
-        AR = (short) (IR & 0xFFF);
+        AR = (short) (IR & 0x0FFF);
         setI(IR >> 15);
         short oppcode = (short) ((IR & 0x7000) >> 12);
 
@@ -491,7 +491,7 @@ public class BasicComputer {
     }
 
     public boolean getIEN() {
-        int value = flags & 0b01;
+        int value = flags & 0b10;
         return value > 0 ? true : false;
     }
 
