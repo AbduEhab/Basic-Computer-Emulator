@@ -1,6 +1,6 @@
 package Debugger;
 
-import Emulator.ComputerFiles.Register;
+import Emulator.Register;
 
 public interface BasicComputerListener {
 
@@ -10,5 +10,5 @@ public interface BasicComputerListener {
 
     boolean onFlagChange();
 
-    boolean onEveryThingChanging();
+    boolean onEveryThingChange();
 }

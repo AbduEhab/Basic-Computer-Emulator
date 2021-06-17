@@ -1,7 +1,7 @@
 package Debugger;
 
-import Emulator.ComputerFiles.BasicComputer;
-import Emulator.ComputerFiles.Register;
+import Emulator.BasicComputer;
+import Emulator.Register;
 
 // This class will track the state of the Computer's Registers and Ram
 public class StateTracker implements BasicComputerListener {
@@ -29,7 +29,7 @@ public class StateTracker implements BasicComputerListener {
     }
 
     @Override
-    public boolean onEveryThingChanging() {
+    public boolean onEveryThingChange() {
         // TODO Auto-generated method stub
         return false;
     }

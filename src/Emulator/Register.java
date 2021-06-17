@@ -1,4 +1,4 @@
-package Emulator.ComputerFiles;
+package Emulator;
 
 public enum Register {
 

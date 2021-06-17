@@ -1,4 +1,4 @@
-package Emulator.ComputerFiles;
+package Emulator;
 
 import Debugger.BasicComputerListener;
 
@@ -41,7 +41,7 @@ public class BasicComputer {
         if (isStopped()) {
             return 0;
         }
-        if (getIEN() && getFGI() || getFGO()) {
+        if (getIEN() && (getFGI() || getFGO())) {
             setR(1);
             AR = 0;
             TR = PC;
@@ -76,7 +76,7 @@ public class BasicComputer {
         cycles++;
 
         // Check oppcode type at T3
-        if (oppcode <= 0x06 || oppcode >= 0x08 && oppcode <= 0x0E) { // If oppcode is a memory reference
+        if (oppcode <= 0x06 || (oppcode >= 0x08 && oppcode <= 0x0E)) { // If oppcode is a memory reference
 
             if (getI()) {
                 SC = 0x05;
@@ -106,7 +106,7 @@ public class BasicComputer {
                     cycles++;
 
                     AC += DR;
-                    setCarryBit((AC & 0xFFFF) > 0 ? 1 : 0);
+                    setCarryBit((AC & ~0xFF) > 0 ? 1 : 0);
                     setE(getCarryBit() ? 1 : 0);
 
                     cycles++;
@@ -117,6 +117,7 @@ public class BasicComputer {
                     DR = memory[AR];
                     cycles++;
 
+                    SC = 0x04;
                     AC = DR;
 
                     cycles++;
@@ -130,6 +131,7 @@ public class BasicComputer {
                     break;
 
                 case 4: // BUN
+                    SC = 0x04;
                     PC = AR;
 
                     cycles++;
@@ -142,6 +144,7 @@ public class BasicComputer {
 
                     cycles++;
 
+                    SC = 0x04;
                     PC = AR;
 
                     cycles++;
@@ -157,6 +160,7 @@ public class BasicComputer {
 
                     cycles++;
 
+                    SC = 0x07;
                     memory[AR] = DR;
                     if (DR == 0)
                         PC++;
@@ -181,7 +185,7 @@ public class BasicComputer {
                     cycles++;
 
                     AC += DR;
-                    setCarryBit((AC & 0xFFFF) > 0 ? 1 : 0);
+                    setCarryBit((AC & ~0xFF) > 0 ? 1 : 0);
                     setE(getCarryBit() ? 1 : 0);
                     AC &= 0xFFFF;
 
@@ -191,9 +195,9 @@ public class BasicComputer {
                 case 0x10: // LDA
                     SC = 0x03;
                     DR = memory[AR];
-
                     cycles++;
 
+                    SC = 0x04;
                     AC = DR;
 
                     cycles++;
@@ -207,6 +211,7 @@ public class BasicComputer {
                     break;
 
                 case 0x12: // BUN
+                    SC = 0x04;
                     PC = AR;
 
                     cycles++;
@@ -219,6 +224,7 @@ public class BasicComputer {
 
                     cycles++;
 
+                    SC = 0x04;
                     PC = AR;
 
                     cycles++;
@@ -234,6 +240,7 @@ public class BasicComputer {
 
                     cycles++;
 
+                    SC = 0x07;
                     memory[AR] = DR;
                     if (DR == 0)
                         PC++;
@@ -323,8 +330,8 @@ public class BasicComputer {
                     case 0x080: // CIR
                         short temp = (short) AC;
                         AC >>= 1;
-                        AC |= (getE() ? 1 : 0) << 15;
-                        setE(temp >> 15);
+                        AC = (AC &= 0x7FFE) | ((getE() ? 1 : 0) << 15);
+                        setE(temp & ~0xFFFE);
 
                         cycles++;
                         break;
@@ -333,16 +340,19 @@ public class BasicComputer {
                         short temp2 = (short) AC;
                         AC <<= 1;
                         AC |= (getE() ? 1 : 0);
-                        setE(temp2 & 0x01);
+                        setE(temp2 >> 15);
+
+                        AC &= 0xFFFF;
 
                         cycles++;
                         break;
 
                     case 0x020: // INC
                         AC++;
-                        setCarryBit(AC >> 15);
+                        setCarryBit(AC >> 16);
                         setE(getCarryBit() ? 1 : 0);
-                        AC &= 0xFFFF;
+
+                        AC &= 0xFFFF; // making sure AC is 16 bits
 
                         cycles++;
                         break;
@@ -385,9 +395,23 @@ public class BasicComputer {
                 }
             }
         }
-        listener.onEveryThingChanging();
+        listener.onEveryThingChange();
 
         return cycles;
+    }
+
+    private boolean reset() {
+        SC = 0b00;
+        AC = 0x00;
+        PC = 0x00;
+        DR = 0x00;
+        AR = 0x00;
+        IR = 0x00;
+        TR = 0x00;
+        OUTR = 0x00;
+        INPR = 0x00;
+        flags = 0b00;
+        return true;
     }
 
     private boolean setR(int value) {
@@ -514,8 +538,15 @@ public class BasicComputer {
         return OUTR;
     }
 
-    public void setListener(BasicComputerListener listener) {
+    public Boolean setListener(BasicComputerListener listener) {
         this.listener = listener;
+        return true;
+    }
+
+    public Boolean setMemory(short[] newMemory) {
+        memory = newMemory;
+        reset();
+        return true;
     }
 
 }
