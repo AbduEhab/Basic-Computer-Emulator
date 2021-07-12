@@ -6,8 +6,5 @@ public class Main {
 
         System.out.println(Integer.toHexString(0b1010));
 
-
-        short[] newMemory = new short[4096];
-        System.out.println(newMemory[0]);
     }
 }

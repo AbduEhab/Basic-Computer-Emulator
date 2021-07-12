@@ -1,5 +1,5 @@
 package Compiler;
 
-public enum MachineCode {
+public enum FileFormat {
     BIN, HEX
 }

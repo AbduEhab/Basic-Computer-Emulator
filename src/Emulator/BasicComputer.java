@@ -1,6 +1,7 @@
 package Emulator;
 
 import Debugger.BasicComputerListener;
+import Debugger.Logger;
 
 // Where the computer will be implemented (Memory included)
 public class BasicComputer {
@@ -38,21 +39,38 @@ public class BasicComputer {
     }
 
     public int completeInstruction() {
+        Logger.Declare("Computing Instruction");
+
         if (isStopped()) {
             return 0;
         }
+
+        cycles = 0; // resetting cycles from previous instruction
+
+        // set PC with ORG value
+        if (PC == 0)
+            PC = memory[0];
+
+        // Entering Interupt Service Routine
         if (getIEN() && (getFGI() || getFGO())) {
+            Logger.Declare("Entering Interupt Service Routine");
+
             setR(1);
             AR = 0;
             TR = PC;
+
+            cycles++;
+
             memory[AR] = TR;
             PC = 0;
+
+            cycles++;
+
             PC++;
             setIEN(0);
             setR(0);
+            return cycles;
         }
-
-        cycles = 0; // resetting cycles from previous instruction
 
         // Load AR with PC at T0
         SC = 0x01;
@@ -386,17 +404,20 @@ public class BasicComputer {
                         break;
 
                     case 0x01: // HLT
-                        setStop();
+                        stop();
                         break;
 
                     default:
-                        System.out.println("invalid Register oppcode : " + getI() + " " + oppcode + " " + AR);
+                        Logger.Error("invalid Register oppcode : " + getI() + " " + oppcode + " " + AR);
+                        stop();
                         break;
                 }
             }
         }
-        listener.onEveryThingChange();
 
+        listener.onEveryThingChanging();
+
+        Logger.Declare("Computed Instruction In " + cycles + " Cycles");
         return cycles;
     }
 
@@ -411,6 +432,8 @@ public class BasicComputer {
         OUTR = 0x00;
         INPR = 0x00;
         flags = 0b00;
+
+        Logger.Declare("Computer Reset");
         return true;
     }
 
@@ -421,6 +444,8 @@ public class BasicComputer {
         } else {
             flags ^= R;
         }
+
+        Logger.Declare("R Bit Set");
         return true;
     }
 
@@ -436,6 +461,8 @@ public class BasicComputer {
         } else {
             flags ^= I;
         }
+
+        Logger.Declare("I Bit Set");
         return true;
     }
 
@@ -451,6 +478,8 @@ public class BasicComputer {
         } else {
             flags ^= CarryBit;
         }
+
+        Logger.Declare("Carry Bit Set");
         return true;
     }
 
@@ -466,6 +495,8 @@ public class BasicComputer {
         } else {
             flags ^= E;
         }
+
+        Logger.Declare("E Bit Set");
         return true;
     }
 
@@ -481,6 +512,8 @@ public class BasicComputer {
         } else {
             flags ^= FGO;
         }
+
+        Logger.Declare("FGO Bit Set");
         return true;
     }
 
@@ -496,6 +529,8 @@ public class BasicComputer {
         } else {
             flags ^= FGI;
         }
+
+        Logger.Declare("FGI Bit Set");
         return true;
     }
 
@@ -511,6 +546,8 @@ public class BasicComputer {
         } else {
             flags ^= IEN;
         }
+
+        Logger.Declare("IEN Bit Set");
         return true;
     }
 
@@ -519,8 +556,10 @@ public class BasicComputer {
         return value > 0 ? true : false;
     }
 
-    private boolean setStop() {
+    private boolean stop() {
         flags ^= 0b1;
+
+        Logger.Declare("Computer Stopped");
         return true;
     }
 
@@ -531,6 +570,8 @@ public class BasicComputer {
 
     public boolean setINPR(byte INPR) {
         this.INPR = INPR;
+
+        Logger.Declare("INP Register Set");
         return true;
     }
 

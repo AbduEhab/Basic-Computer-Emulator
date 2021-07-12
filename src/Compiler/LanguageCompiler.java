@@ -8,7 +8,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
 
+import Debugger.Logger;
 import Emulator.BasicComputer;
+import Exceptions.FileNotParsed;
+import Exceptions.InvalidSyntax;
 
 // This class will compile some psudo code to Basic Assembly Code
 public class LanguageCompiler {
@@ -22,45 +25,223 @@ public class LanguageCompiler {
             { "OUT", "I/O", 3, -1, 0xF400 }, { "SKI", "I/O", 3, -1, 0xF200 }, { "SKO", "I/O", 3, -1, 0xF100 },
             { "ION", "I/O", 3, -1, 0xF080 }, { "IOF", "I/O", 3, -1, 0xF040 } };
 
-    public static boolean loadMemory(String path, MachineCode fileType, BasicComputer computer) {
-        if (fileType != null)
-            return false;
+    public static boolean loadMemoryFromBinaryFile(String path, BasicComputer computer)
+            throws FileNotParsed, FileNotFoundException, IOException {
+
+        Logger.Declare("Loading Memory From BIN File");
+
+        BufferedReader lineBuffer = null;
 
         try {
-            BufferedReader lineBuffer = new BufferedReader(new FileReader(path));
+            lineBuffer = new BufferedReader(new FileReader(path));
 
-            String line = "";
+        } catch (FileNotFoundException e) {
 
-            short[] newMemory = new short[4096];
-            int i = 0;
+            Logger.Error("File at path: {" + path + "} is not found");
+            throw new FileNotFoundException("File at path: {" + path + "} is not found");
+        }
 
-            switch (fileType) {
+        String line = "";
 
-                case BIN:
-                    while ((line = lineBuffer.readLine()) != null)
-                        newMemory[i++] = (short) Integer.parseInt(line, 2);
-                    break;
-                case HEX:
+        short[] newMemory = new short[4096];
+        int i = 0;
+
+        while ((line = lineBuffer.readLine()) != null) {
+            if (i > 4096) {
+                Logger.Error("File not Parsed correctly (Max Memory reached)");
+                throw new FileNotParsed("File not Parsed correctly (Max Memory reached)");
+            }
+
+            newMemory[i++] = (short) Integer.parseInt(line, 2);
+
+            Logger.Log("Memory Line $" + (i - 1) + " Loaded with Value: " + newMemory[i - 1]);
+        }
+
+        lineBuffer.close();
+
+        if (i < 4097) {
+            Logger.Error("File not Parsed correctly (Max Memory NOT reached)");
+            throw new FileNotParsed("File not Parsed correctly (Max Memory NOT reached)");
+        }
+
+        computer.setMemory(newMemory);
+
+        Logger.Declare("Memory Loaded From BIN File");
+        return true;
+    }
+
+    public static boolean loadMemoryFromHexFile(String path, BasicComputer computer)
+            throws FileNotParsed, FileNotFoundException, IOException {
+
+        Logger.Declare("Loading Memory From HEX File");
+
+        BufferedReader lineBuffer = null;
+
+        try {
+            lineBuffer = new BufferedReader(new FileReader(path));
+
+        } catch (FileNotFoundException e) {
+
+            Logger.Error("File at path: {" + path + "} is not found");
+            throw new FileNotFoundException("File at path: {" + path + "} is not found");
+        }
+
+        String line = "";
+
+        short[] newMemory = new short[4096];
+        int i = 0;
+
+        while ((line = lineBuffer.readLine()) != null) {
+            if (i > 4096 || line.charAt(0) != ':') {
+                Logger.Error("File not Parsed correctly (Max Memory reached)");
+                throw new FileNotParsed("File not Parsed correctly (Max Memory reached)");
+            }
+
+            line = line.substring(1);
+
+            if (line.length() != 14 || line.substring(0, 2) != "04") {
+                Logger.Error("File not Parsed correctly (Size Mismatch)");
+                throw new FileNotParsed("File not Parsed correctly (Size Mismatch)");
+            }
+
+            newMemory[i++] = (short) Integer.parseInt(line.substring(10, 12) + line.substring(8, 10), 16);
+
+            Logger.Log("Memory Line $" + (i - 1) + " Loaded with Value: " + newMemory[i - 1]);
+        }
+
+        lineBuffer.close();
+
+        if (i < 4097) {
+            Logger.Error("File not Parsed correctly (Max Memory NOT reached)");
+            throw new FileNotParsed("File not Parsed correctly (Max Memory NOT reached)");
+        }
+
+        computer.setMemory(newMemory);
+
+        Logger.Declare("Memory Loaded From HEX File");
+        return true;
+    }
+
+    public static boolean checkSyntax(BufferedReader fileBuffer) throws IOException, InvalidSyntax {
+        Logger.Declare("Checking Syntax");
+
+        String[] stringFile = new String[4096];
+        String line = "";
+
+        HashMap<String, Integer> variables = new HashMap<String, Integer>();
+
+        for (int i = 0; (line = fileBuffer.readLine()) != null; i++) {
+            stringFile[i] = line;
+        }
+
+        if (stringFile.length > 4096) {
+            Logger.Error("Syntax Check Found Errors (Code Too Big, Max 4096 Lines)");
+            throw new InvalidSyntax("Code Too Big (Max 4096 Lines)", -1, -1);
+        }
+
+        if (stringFile[0].split(" ")[0] != "ORG") {
+            Logger.Error("Syntax Check Found Errors (ORG Not Specified)");
+            throw new InvalidSyntax("ORG Not Specified", 0, 0);
+        }
+
+        int hlt = 0;
+
+        for (int i = 1; i < stringFile.length; i++) {
+            if (stringFile[i] == "HLT") {
+                hlt = i;
+                break;
+            }
+        }
+
+        if (hlt == 0) {
+            Logger.Error("Syntax Check Found Errors (HLT Not Specified)");
+            throw new InvalidSyntax("HLT Not Specified", 4095, 0);
+        }
+
+        for (int i = hlt + 1; i < stringFile.length; i++) {
+
+            String[] lineArray = stringFile[i].split(" ");
+
+            if (lineArray.length != 3) {
+                Logger.Error("Syntax Check Found Errors (Incorrect Structure)");
+                throw new InvalidSyntax("Variable Structure should be: [{NAME}, {TYPE} {Value}]", i, 0);
+            }
+
+            if (lineArray[0].charAt(lineArray.length - 1) != ',') {
+                Logger.Error("Syntax Check Found Errors (Variable NAME Not Specified)");
+                throw new InvalidSyntax("Variable NAME Not Specified", i, 0);
+            }
+            if (lineArray[1] != "HEX" || lineArray[1] != "BIN" || lineArray[1] != "DEC") {
+                Logger.Error("Syntax Check Found Errors (Variable TYPE Not Specified)");
+                throw new InvalidSyntax("Variable TYPE Not Specified", i, lineArray[0].length());
+            }
+            if (lineArray[2].length() == 0) {
+                Logger.Error("Syntax Check Found Errors (Variable Value Not Specified)");
+                throw new InvalidSyntax("Variable Value Not Specified", i,
+                        lineArray[0].length() + lineArray[1].length() + 2);
+            }
+
+            if (variables.get(lineArray[0]) != null) {
+                Logger.Error("Syntax Check Found Errors (Variable Name Duplicated)");
+                throw new InvalidSyntax("Variable Name Duplicated", i, 0);
+            }
+
+            variables.put(lineArray[0], 0);
+
+        }
+
+        for (int i = 1; i < hlt; i++) {
+
+            String[] lineArray = stringFile[i].split(" ");
+
+            if (getOpCode(lineArray[0]) == null) {
+                Logger.Error("Syntax Check Found Errors (Unknown Instruction Signature)");
+                throw new InvalidSyntax("Unknown Instruction Signature", i, lineArray[0].length());
+            }
+
+            switch (getOpCode(lineArray[0])[1] + "") {
+                case "M":
+                    if (stringFile[i].length() > 3 || stringFile[i].length() < 3) {
+                        Logger.Error("Syntax Check Found Errors (Incorrect Structure)");
+                        throw new InvalidSyntax(
+                                "Argument Structure For Memort operation should be: [{INSTRUCTION}, {TARGET} {INDIRECT or DIRECT }(optional)]",
+                                i, 0);
+                    }
+
+                    if (variables.get(lineArray[1]) == null || lineArray[1].charAt(0) != '#'
+                            || lineArray[1].charAt(0) != '$') {
+                        Logger.Error("Syntax Check Found Errors (Unknown Variable Signature)");
+                        throw new InvalidSyntax(
+                                "Unknown Variable Signature. Only use valid variables, Hex or Dec Values", i,
+                                lineArray[0].length() + 1);
+                    }
+
+                    if (lineArray.length == 3 && lineArray[2] != "I") {
+                        Logger.Error("Syntax Check Found Errors (Unrecognized Symbol)");
+                        throw new InvalidSyntax(
+                                "Unrecognized Symbol. For Indirect use \"I\" and leave empty for direct", i,
+                                lineArray[0].length() + lineArray[1].length() + 2);
+                    }
 
                     break;
 
                 default:
+                    if (stringFile[i].length() > 1 || stringFile[i].length() < 1) {
+                        Logger.Error("Syntax Check Found Errors (Incorrect Structure)");
+                        throw new InvalidSyntax(
+                                "Argument Structure for Non memory operation should be: [{INSTRUCTION}]", i, 0);
+                    }
+
                     break;
             }
 
-            lineBuffer.close();
-        } catch (FileNotFoundException e) {
-            System.out.println("File at path: {" + path + "} is not found");
-            return false;
-        } catch (IOException e) {
-            System.out.println("File end reached unexpectidly");
-            return false;
         }
 
+        Logger.Declare("Syntax Check Complete");
         return true;
     }
 
-    public static boolean compile(MachineCode fileType, String filePath) {
+    public static boolean compile(FileFormat fileType, String filePath) {
 
         try {
 
@@ -88,11 +269,11 @@ public class LanguageCompiler {
                     stopPoint = i;
                     break;
                 } else {
-                    //variables.put(key, value);
+                    // variables.put(key, value);
                 }
             }
 
-            if (fileType == MachineCode.HEX) {
+            if (fileType == FileFormat.HEX) {
 
                 writer = new FileWriter("../Examples/COMPILEDCODE.hex");
                 buffer = new BufferedWriter(writer);
@@ -168,7 +349,7 @@ public class LanguageCompiler {
         return null;
     }
 
-    public static Object[] decodeOpcode(String opcode, MachineCode filetype) {
+    public static Object[] decodeOpcode(String opcode, FileFormat filetype) {
 
         switch (filetype) {
             case BIN:

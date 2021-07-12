@@ -29,7 +29,7 @@ public class StateTracker implements BasicComputerListener {
     }
 
     @Override
-    public boolean onEveryThingChange() {
+    public boolean onEveryThingChanging() {
         // TODO Auto-generated method stub
         return false;
     }

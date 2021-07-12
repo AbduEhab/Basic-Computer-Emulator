@@ -10,5 +10,5 @@ public interface BasicComputerListener {
 
     boolean onFlagChange();
 
-    boolean onEveryThingChange();
+    boolean onEveryThingChanging();
 }
