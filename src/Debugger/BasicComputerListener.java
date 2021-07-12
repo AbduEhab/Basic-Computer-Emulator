@@ -1,6 +1,6 @@
 package Debugger;
 
-import Emulator.ComputerFiles.Register;
+import Emulator.Register;
 
 public interface BasicComputerListener {
 

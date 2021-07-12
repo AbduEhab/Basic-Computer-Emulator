@@ -1,7 +1,7 @@
 package Debugger;
 
-import Emulator.ComputerFiles.BasicComputer;
-import Emulator.ComputerFiles.Register;
+import Emulator.BasicComputer;
+import Emulator.Register;
 
 // This class will track the state of the Computer's Registers and Ram
 public class StateTracker implements BasicComputerListener {
