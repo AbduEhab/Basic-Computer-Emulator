@@ -15,7 +15,7 @@ import Exceptions.InvalidSyntax;
 
 // This class will compile some psudo code to Basic Assembly Code
 public class LanguageCompiler {
-    static final Object[][] instructionSet = { { "AND", "M", 5, 0, 0x08 }, { "ADD", "M", 5, 1, 0x09 },
+    public static final Object[][] instructionSet = { { "AND", "M", 5, 0, 0x08 }, { "ADD", "M", 5, 1, 0x09 },
             { "LDA", "M", 5, 2, 0x0A }, { "STA", "M", 5, 3, 0x0B }, { "BUN", "M", 5, 4, 0x0C },
             { "BSA", "M", 5, 5, 0x0D }, { "ISZ", "M", 6, 6, 0x0E }, { "CLA", "R", 3, -1, 0x7800 },
             { "CLE", "R", 3, -1, 0x7400 }, { "CMA", "R", 3, -1, 0x7200 }, { "CME", "R", 3, -1, 0x7100 },
@@ -70,6 +70,7 @@ public class LanguageCompiler {
         return true;
     }
 
+    // Load the memory from a HEX file
     public static boolean loadMemoryFromHexFile(String path, BasicComputer computer)
             throws FileNotParsed, FileNotFoundException, IOException {
 
@@ -77,6 +78,7 @@ public class LanguageCompiler {
 
         BufferedReader lineBuffer = null;
 
+        // check if file is valid
         try {
             lineBuffer = new BufferedReader(new FileReader(path));
 
@@ -88,10 +90,12 @@ public class LanguageCompiler {
 
         String line = "";
 
+        // array to replace current empty memory
         short[] newMemory = new short[4096];
         int i = 0;
 
         while ((line = lineBuffer.readLine()) != null) {
+            // if the hex file valid
             if (i > 4096 || line.charAt(0) != ':') {
                 Logger.Error("File not Parsed correctly (Max Memory reached)");
                 throw new FileNotParsed("File not Parsed correctly (Max Memory reached)");
@@ -99,6 +103,7 @@ public class LanguageCompiler {
 
             line = line.substring(1);
 
+            // check if data bytes are NOT 4 or if the line is generally parsed incorrectly
             if (line.length() != 14 || line.substring(0, 2) != "04") {
                 Logger.Error("File not Parsed correctly (Size Mismatch)");
                 throw new FileNotParsed("File not Parsed correctly (Size Mismatch)");
@@ -186,11 +191,24 @@ public class LanguageCompiler {
                 throw new InvalidSyntax("Variable Name Duplicated", i, 0);
             }
 
+            switch (lineArray[1]) {
+                case "BIN":
+                    if (Integer.parseInt(lineArray[2], 2) >= 2048) {
+                        Logger.Error("Syntax Check Found Errors (Variable Size Greater Than allowed)");
+                        throw new InvalidSyntax("Max Variable size can Not exceed 2047 (2^11)", i,
+                                lineArray[0].length() + lineArray[1].length() + 2);
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+
             variables.put(lineArray[0], 0);
 
         }
 
-        for (int i = 1; i < hlt; i++) {
+        for (int i = 1; i <= hlt; i++) {
 
             String[] lineArray = stringFile[i].split(" ");
 
@@ -241,101 +259,452 @@ public class LanguageCompiler {
         return true;
     }
 
-    public static boolean compile(FileFormat fileType, String filePath) {
+    public static boolean compileToHEX(String filePath, String destination) throws FileNotFoundException, IOException {
+
+        Logger.Declare("File Compile Started");
+
+        if (filePath == null) {
+            Logger.Error("Source File at path: {" + filePath + "} is not found");
+            throw new FileNotFoundException("File at path: {" + filePath + "} is not found");
+        }
+        if (destination == null) {
+            Logger.Error("Write File at path: {" + destination + "} is not found");
+            throw new FileNotFoundException("File at path: {" + destination + "} is not found");
+        }
+
+        String[] stringFile = new String[4096];
+
+        BufferedReader reader = null;
 
         try {
+            reader = new BufferedReader(new FileReader(filePath));
+        } catch (FileNotFoundException e) {
 
-            BufferedReader reader = new BufferedReader(new FileReader(filePath));
+            Logger.Error("File at path: {" + filePath + "} is not found");
+            throw new FileNotFoundException("File at path: {" + filePath + "} is not found");
+        }
 
-            FileWriter writer;
-            BufferedWriter buffer;
+        String readLine = reader.readLine();
 
-            String outputString = "";
-            String readLine = reader.readLine();
+        // load the StringArray containing all the lines
+        for (int i = 0; (reader.readLine()) != null; i++) {
+            stringFile[i] = readLine;
+        }
 
-            String[] stringFile = new String[4096];
+        reader.close();
 
-            for (int i = 0; (reader.readLine()) != null; i++) {
-                stringFile[i] = readLine;
-            }
+        String outputString = "";
 
-            // hashmap of variables defined in the code
-            HashMap<String, Object[]> variables = new HashMap<String, Object[]>();
+        // Write ORG command
+        {
+            int data = Integer.parseInt("4" + "000", 16) + Integer.parseInt(stringFile[0].split(" ")[1]);
 
-            int stopPoint = 0;
+            String dataString = Integer.toHexString(data);
 
-            for (int i = 4095; i > 0; i--) {
-                if (stringFile[i] == "HLT") {
-                    stopPoint = i;
+            // correctly formating Data value
+            switch (dataString.length()) {
+                case 1:
+                    dataString = "0" + dataString + "00";
                     break;
-                } else {
-                    // variables.put(key, value);
-                }
+                case 2:
+                    dataString = dataString + "00";
+                    break;
+                case 3:
+                    dataString = dataString.substring(1) + dataString.charAt(0);
+                    break;
+                case 4:
+                    dataString = dataString.substring(2) + dataString.substring(0, 2);
+                    break;
+                default:
+                    break;
+            }
+            outputString += ':' + "04" + "0000" + "00" + dataString + "00" + "\n";
+        }
+
+        int hlt = 0;
+
+        for (int i = 1; i < stringFile.length; i++) {
+            if (stringFile[i] == "HLT") {
+                hlt = i;
+                break;
+            }
+        }
+
+        // hashmap of variables defined in the code
+        HashMap<String, Integer> variables = new HashMap<String, Integer>();
+
+        for (int i = hlt + 1; i < stringFile.length; i++) {
+
+            String[] lineArray = stringFile[i].split(" ");
+
+            switch (lineArray[1]) {
+                case "DEC":
+                    variables.put(lineArray[0], Integer.parseInt(lineArray[2]));
+                    break;
+
+                case "HEX":
+                    variables.put(lineArray[0], Integer.parseInt(lineArray[2], 16));
+                    break;
+
+                case "BIN":
+                    variables.put(lineArray[0], Integer.parseInt(lineArray[2], 2));
+                    break;
+
+                default:
+                    break;
             }
 
-            if (fileType == FileFormat.HEX) {
+        }
 
-                writer = new FileWriter("../Examples/COMPILEDCODE.hex");
-                buffer = new BufferedWriter(writer);
+        for (int i = 1; i <= hlt; i++) {
 
-                for (int i = 0; i < stopPoint; i++) {
+            String[] lineArray = stringFile[i].split(" ");
 
-                    String[] lineArray = stringFile[i].split(" ");
+            Object[] opCode = getOpCode(lineArray[0].substring(0, lineArray[0].length() - 1));
 
-                    Object[] opCode;
+            int data;
 
-                    if ((opCode = getOpCode(stringFile[i])) == null)
-                        return false;
+            if (opCode[1] == "M") {
 
-                    if (opCode[1] == "M") {
+                if (variables.containsKey(lineArray[2]))
+                    data = Integer
+                            .parseInt(Integer.toHexString(
+                                    Integer.parseInt((lineArray.length == 2 ? opCode[3] : opCode[4]) + "")) + "000", 16)
+                            + Integer.parseInt(stringFile[0].split(" ")[1]);
+                else
+                    data = Integer
+                            .parseInt(Integer.toHexString(
+                                    Integer.parseInt((lineArray.length == 2 ? opCode[3] : opCode[4]) + "")) + "000", 16)
+                            + variables.get(lineArray[1]);
 
-                        if (!variables.containsKey(lineArray[1])) {
-                            if (lineArray[1].charAt(0) == '#')
-                                lineArray[1] = Integer.decode(lineArray[1]) + "";
-                        } else {
-                            lineArray[1] = (String) variables.get(lineArray[0])[2];
-                        }
+                String dataString = Integer.toHexString(data);
 
-                        if (opCode[0] == "STA") {
-                            if (true)
-                                outputString += ':' + "02" + "0064" + "00" + "0" + Integer.toHexString((int) opCode[4])
-                                        + variables.get(lineArray[1])[1];
-                        }
-
-                        if (opCode[0] == "LDAI") {
-                            outputString += ':' + "02" + "0064" + "00" + "1";
-                        } else {
-                            outputString += ':' + "02" + "0064" + "00" + "0";
-                        }
-
-                    } else if (opCode[1] == "R") {
-
-                        outputString += ':' + "02" + "0064" + "00";
-
-                    } else if (opCode[1] == "I/O") {
-
-                        outputString += ':' + "02" + "0064" + "00";
-
-                    }
-
+                // correctly formating Data value
+                switch (dataString.length()) {
+                    case 1:
+                        dataString = "0" + dataString + "00";
+                        break;
+                    case 2:
+                        dataString = dataString + "00";
+                        break;
+                    case 3:
+                        dataString = dataString.substring(1) + "0" + dataString.charAt(0);
+                        break;
+                    case 4:
+                        dataString = dataString.substring(2) + dataString.substring(0, 2);
+                        break;
+                    default:
+                        break;
                 }
+
+                String address = Integer.toHexString(i);
+                // correctly formating Address value
+                switch (address.length()) {
+                    case 1:
+                        address = "0" + dataString + "00";
+                        break;
+                    case 2:
+                        address = dataString + "00";
+                        break;
+                    case 3:
+                        address = dataString.substring(1) + "0" + dataString.charAt(0);
+                        break;
+                    case 4:
+                        address = dataString.substring(2) + dataString.substring(0, 2);
+                        break;
+                    default:
+                        break;
+                }
+                outputString += ':' + "04" + address + "00" + dataString + "00" + "\n";
 
             } else {
 
-                writer = new FileWriter("../Examples/COMPILEDCODE.bin");
-                buffer = new BufferedWriter(writer);
+                data = Integer.parseInt(opCode[4] + "");
+
+                String dataString = Integer.toHexString(data);
+
+                // correctly formating Data value
+                switch (dataString.length()) {
+                    case 1:
+                        dataString = "0" + dataString + "00";
+                        break;
+                    case 2:
+                        dataString = dataString + "00";
+                        break;
+                    case 3:
+                        dataString = dataString.substring(1) + "0" + dataString.charAt(0);
+                        break;
+                    case 4:
+                        dataString = dataString.substring(2) + dataString.substring(0, 2);
+                        break;
+                    default:
+                        break;
+                }
+
+                String address = Integer.toHexString(i);
+                // correctly formating Address value
+                switch (address.length()) {
+                    case 1:
+                        address = "0" + dataString + "00";
+                        break;
+                    case 2:
+                        address = dataString + "00";
+                        break;
+                    case 3:
+                        address = dataString.substring(1) + "0" + dataString.charAt(0);
+                        break;
+                    case 4:
+                        address = dataString.substring(2) + dataString.substring(0, 2);
+                        break;
+                    default:
+                        break;
+                }
+                outputString += ':' + "04" + address + "00" + dataString + "00" + "\n";
             }
-
-            buffer.close();
-            reader.close();
-
-        } catch (FileNotFoundException e) {
-            System.out.println("File at path: {" + filePath + "} is not found");
-            return false;
-        } catch (IOException e) {
-            e.printStackTrace();
         }
 
+        for (int i = hlt + 1; i < stringFile.length; i++) {
+
+            String[] lineArray = stringFile[i].split(" ");
+
+            String dataString = lineArray[2];
+
+            if (lineArray[1] != "HEX")
+                switch (lineArray[1]) {
+
+                    case "DEC":
+                        dataString = Integer.toHexString(Integer.parseInt(lineArray[2]));
+                        break;
+
+                    case "BIN":
+                        dataString = Integer.toHexString(Integer.parseInt(lineArray[2], 2));
+                        break;
+                    default:
+                        break;
+                }
+
+            // correctly formating Data value
+            switch (dataString.length()) {
+                case 1:
+                    dataString = "0" + dataString + "00";
+                    break;
+                case 2:
+                    dataString = dataString + "00";
+                    break;
+                case 3:
+                    dataString = dataString.substring(1) + "0" + dataString.charAt(0);
+                    break;
+                case 4:
+                    dataString = dataString.substring(2) + dataString.substring(0, 2);
+                    break;
+                default:
+                    break;
+            }
+
+            String address = Integer.toHexString(i);
+            // correctly formating Address value
+            switch (address.length()) {
+                case 1:
+                    address = "0" + dataString + "00";
+                    break;
+                case 2:
+                    address = dataString + "00";
+                    break;
+                case 3:
+                    address = dataString.substring(1) + "0" + dataString.charAt(0);
+                    break;
+                case 4:
+                    address = dataString.substring(2) + dataString.substring(0, 2);
+                    break;
+                default:
+                    break;
+            }
+            outputString += ':' + "04" + address + "00" + dataString + "00" + "\n";
+        }
+
+        FileWriter writer = new FileWriter(destination);
+        BufferedWriter buffer = new BufferedWriter(writer);
+
+        buffer.write(outputString);
+
+        buffer.close();
+
+        Logger.Declare("File Compile Complete");
+        return true;
+    }
+
+    public static boolean compileToBIN(String filePath, String destination) throws FileNotFoundException, IOException {
+
+        Logger.Declare("File Compile Started");
+
+        if (filePath == null) {
+            Logger.Error("Source File at path: {" + filePath + "} is not found");
+            throw new FileNotFoundException("File at path: {" + filePath + "} is not found");
+        }
+        if (destination == null) {
+            Logger.Error("Write File at path: {" + destination + "} is not found");
+            throw new FileNotFoundException("File at path: {" + destination + "} is not found");
+        }
+
+        String[] stringFile = new String[4096];
+
+        BufferedReader reader = null;
+
+        try {
+            reader = new BufferedReader(new FileReader(filePath));
+        } catch (FileNotFoundException e) {
+
+            Logger.Error("File at path: {" + filePath + "} is not found");
+            throw new FileNotFoundException("File at path: {" + filePath + "} is not found");
+        }
+
+        String readLine = reader.readLine();
+
+        // load the StringArray containing all the lines
+        for (int i = 0; (reader.readLine()) != null; i++) {
+            stringFile[i] = readLine;
+        }
+
+        reader.close();
+
+        String outputString = "";
+
+        // Write ORG command
+        {
+            int data = Integer.parseInt("4" + "000", 16) + Integer.parseInt(stringFile[0].split(" ")[1]);
+
+            String dataString = Integer.toBinaryString(data);
+
+            int datalength = 16 - dataString.length();
+
+            // correctly formating Data value
+            for (int i = 0; i < datalength; i++) {
+                dataString = "0" + dataString;
+            }
+            outputString += dataString + "\n";
+        }
+
+        int hlt = 0;
+
+        for (int i = 1; i < stringFile.length; i++) {
+            if (stringFile[i] == "HLT") {
+                hlt = i;
+                break;
+            }
+        }
+
+        // hashmap of variables defined in the code
+        HashMap<String, Integer> variables = new HashMap<String, Integer>();
+
+        for (int i = hlt + 1; i < stringFile.length; i++) {
+
+            String[] lineArray = stringFile[i].split(" ");
+
+            switch (lineArray[1]) {
+                case "DEC":
+                    variables.put(lineArray[0], Integer.parseInt(lineArray[2]));
+                    break;
+
+                case "HEX":
+                    variables.put(lineArray[0], Integer.parseInt(lineArray[2], 16));
+                    break;
+
+                case "BIN":
+                    variables.put(lineArray[0], Integer.parseInt(lineArray[2], 2));
+                    break;
+
+                default:
+                    break;
+            }
+
+        }
+
+        for (int i = 1; i <= hlt; i++) {
+
+            String[] lineArray = stringFile[i].split(" ");
+
+            Object[] opCode = getOpCode(lineArray[0].substring(0, lineArray[0].length() - 1));
+
+            int data;
+
+            if (opCode[1] == "M") {
+
+                if (variables.containsKey(lineArray[2]))
+                    data = Integer
+                            .parseInt(Integer.toHexString(
+                                    Integer.parseInt((lineArray.length == 2 ? opCode[3] : opCode[4]) + "")) + "000", 16)
+                            + Integer.parseInt(stringFile[0].split(" ")[1]);
+                else
+                    data = Integer
+                            .parseInt(Integer.toHexString(
+                                    Integer.parseInt((lineArray.length == 2 ? opCode[3] : opCode[4]) + "")) + "000", 16)
+                            + variables.get(lineArray[1]);
+
+                String dataString = Integer.toBinaryString(data);
+
+                int datalength = 16 - dataString.length();
+
+                // correctly formating Data value
+                for (int j = 0; j < datalength; i++) {
+                    dataString = "0" + dataString;
+                }
+                outputString += dataString + "\n";
+
+            } else {
+
+                data = Integer.parseInt(opCode[4] + "");
+
+                String dataString = Integer.toBinaryString(data);
+
+                int datalength = 16 - dataString.length();
+
+                // correctly formating Data value
+                for (int j = 0; j < datalength; i++) {
+                    dataString = "0" + dataString;
+                }
+
+                outputString += dataString + "\n";
+            }
+        }
+
+        for (int i = hlt + 1; i < stringFile.length; i++) {
+
+            String[] lineArray = stringFile[i].split(" ");
+
+            String dataString = lineArray[2];
+
+            if (lineArray[1] != "HEX")
+                switch (lineArray[1]) {
+
+                    case "DEC":
+                        dataString = Integer.toBinaryString(Integer.parseInt(lineArray[2]));
+                        break;
+
+                    case "BIN":
+                        dataString = Integer.toBinaryString(Integer.parseInt(lineArray[2], 2));
+                        break;
+                    default:
+                        break;
+                }
+
+            int datalength = 16 - dataString.length();
+
+            // correctly formating Data value
+            for (int j = 0; j < datalength; i++) {
+                dataString = "0" + dataString;
+            }
+
+            outputString += dataString + "\n";
+        }
+
+        FileWriter writer = new FileWriter(destination);
+        BufferedWriter buffer = new BufferedWriter(writer);
+
+        buffer.write(outputString);
+
+        buffer.close();
+
+        Logger.Declare("File Compile Complete");
         return true;
     }
 
@@ -349,49 +718,14 @@ public class LanguageCompiler {
         return null;
     }
 
-    public static Object[] decodeOpcode(String opcode, FileFormat filetype) {
+    public static String displayOpCodes() {
+        String s = "";
 
-        switch (filetype) {
-            case BIN:
-                if (opcode.substring(0, 3) == "1111") {
-                    for (Object[] objects : instructionSet) {
-                        if ((objects[4] + "") == opcode) {
-                            return new Object[] { "I/O", Integer.toBinaryString((int) objects[4]) };
-                        }
-                    }
-                    return new Object[] { "null", -1 };
-                }
-
-                if (opcode.substring(0, 3) == "0111") {
-                    for (Object[] objects : instructionSet) {
-                        if ((objects[4] + "") == opcode) {
-                            return new Object[] { "R", "0" + Integer.toBinaryString((int) objects[4]) };
-                        }
-                    }
-                    return new Object[] { "null", -1 };
-                }
-
-                if (opcode.charAt(0) == '0') {
-                    for (Object[] objects : instructionSet) {
-                        if ((objects[4] + "") == opcode) {
-                            return new Object[] { "M", "0" + Integer.toBinaryString((int) objects[3]) };
-                        }
-                    }
-                } else {
-                    for (Object[] objects : instructionSet) {
-                        if ((objects[4] + "") == opcode) {
-                            return new Object[] { "M", Integer.toBinaryString((int) objects[4]) };
-                        }
-                    }
-                }
-                break;
-            case HEX:
-
-                break;
-            default:
-                break;
+        for (Object[] opcode : instructionSet) {
+            s += "\t- " + opcode[0] + ", type: " + opcode[1] + ", Code = "
+                    + (!opcode[1].equals("M") ? opcode[4] : opcode[3] + ", Indirect code = " + opcode[4]) + "\n";
         }
 
-        return new Object[] { "null", -1 };
+        return s;
     }
 }

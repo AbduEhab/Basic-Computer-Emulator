@@ -47,10 +47,6 @@ public class BasicComputer {
 
         cycles = 0; // resetting cycles from previous instruction
 
-        // set PC with ORG value
-        if (PC == 0)
-            PC = memory[0];
-
         // Entering Interupt Service Routine
         if (getIEN() && (getFGI() || getFGO())) {
             Logger.Declare("Entering Interupt Service Routine");
